@@ -42,3 +42,16 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# --- Added for this repo ---
+
+# Partial backend configuration (real bucket name contains the account ID).
+# Commit backend.hcl.example instead.
+backend.hcl
+
+# Saved plan files can contain resolved values such as account IDs and ARNs.
+*tfplan*
+planout
+
+# Claude Code's personal "don't ask again" approvals; never shared.
+.claude/settings.local.json
