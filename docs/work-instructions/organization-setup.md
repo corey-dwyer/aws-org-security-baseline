@@ -379,7 +379,7 @@ region = <workload-region>
 
 **Trusted access and delegated administrators:**
 
-- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS CloudTrail, Amazon GuardDuty, AWS Identity and Access Management, AWS Account Management, and IAM Identity Center. Any other service listed should be explainable.
+- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS CloudTrail, Amazon GuardDuty, AWS Identity and Access Management, and IAM Identity Center. Any other service listed should be explainable.
 - `aws organizations list-delegated-administrators --profile org-management` lists only the shared security account, and `aws organizations list-delegated-services-for-account --account-id <shared-security-account-id> --profile org-management` shows it is delegated administrator for CloudTrail and GuardDuty only.
 
 **Root credentials** (the check deferred from section 5):
