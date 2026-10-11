@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (gitignored) and fill in your value.
+aws_profile = "your-shared-security-profile"
