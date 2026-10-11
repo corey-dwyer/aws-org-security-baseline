@@ -6,7 +6,7 @@ This work instruction configures the AWS Organization structure that the Terrafo
 
 These settings apply across every project in the Organization, so they are deliberately not owned by any single project's code. They are configured manually by following this document, which keeps the procedure reviewable even though it is not automated. Moving them into Terraform in this repository is possible later. The decision behind this split is recorded in [aws-detection-as-code ADR 0011](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0011-shared-security-baseline-in-dedicated-account-and-repository.md).
 
-Use this document for the initial setup of the Organization's security baseline. Adding a later project account reuses sections 7, 10, 10, and 11.
+Use this document for the initial setup of the Organization's security baseline. Adding a later project account reuses sections 7, 9, 10, and 11.
 
 ## 2. Conventions
 
@@ -15,7 +15,7 @@ Use this document for the initial setup of the Organization's security baseline.
 | Placeholder | Meaning |
 |---|---|
 | `<management-account-id>` | The Organization's management account |
-| `<shared-security-account-id>` | Delegated administrator for CloudTrail and GuardDuty |
+| `<shared-security-account-id>` | Delegated administrator for CloudTrail, and for GuardDuty once section 8.2 is performed |
 | `<log-archive-account-id>` | Holds the organization trail's bucket |
 | `<project-tooling-account-id>` | A project's Terraform state, CI trust, and SIEM |
 | `<project-target-account-id>` | A project's attack-simulation account |
@@ -42,12 +42,12 @@ Use this document for the initial setup of the Organization's security baseline.
 - The projects OU and the existing project account exist.
 - A unique email address is ready for each account to be created. AWS requires a different address per account; plus-addressing on a single inbox (for example `name+role@example.com`) satisfies this.
 - The operator's private record of real values is open.
-- A Codespace for this repository is running, for the CLI steps in section 11.
+- A Codespace for this repository is running, for the CLI steps in section 10.
 - **Cost:** most steps here are free. Designating a GuardDuty delegated administrator automatically enables GuardDuty in that account in each Region where it is designated. That starts GuardDuty's 30-day free trial, after which usage is billed. Section 8.2 covers this before any designation happens.
 
 ## 4. Management-account access for the operator
 
-**Why.** Organization-level tasks (creating accounts and organizational units, enabling trusted access, registering delegated administrators, and Identity Center assignments) can only be done from the management account. The operator's day-to-day Identity Center access has no assignment there, and the root user is reserved for tasks that require it. This section creates a dedicated permission set, `OrganizationAdministration`, assigned only to the management account. It is the only step in this work instruction that uses the root user: assigning access to the management account requires IAM administrative permissions there, which no Identity Center session has yet.
+**Why.** Organization-level tasks (creating accounts and organizational units, enabling trusted access, registering delegated administrators, and Identity Center assignments) can only be done from the management account. The operator's day-to-day Identity Center access has no assignment there, and the root user is reserved for tasks that require it. This section creates a dedicated permission set, `OrganizationAdministration`, assigned only to the management account. This section is where the root user is used, in a single session, for two things: assigning the first access to the management account, and activating IAM access to Billing. Assigning access to the management account requires IAM administrative permissions there, which no Identity Center session has yet. IAM access to Billing is off by default for the management account, only the root user can turn it on, and the Budgets and Cost Anomaly Detection consoles need it.
 
 The permission set grants what this work instruction needs and nothing for running workloads:
 
@@ -57,10 +57,12 @@ The permission set grants what this work instruction needs and nothing for runni
 | `AWSSSOMasterAccountAdministrator` | AWS managed | Identity Center permission sets and account assignments |
 | `AWSCloudTrail_ReadOnlyAccess` | AWS managed | Read access the CloudTrail console needs to display organization settings |
 | `AmazonGuardDutyReadOnlyAccess` | AWS managed | Read access the GuardDuty console needs to display organization settings |
-| `AWSBillingReadOnlyAccess` | AWS managed | Read access to billing data, needed by the Budgets and Cost Anomaly Detection consoles |
-| Inline policy (below) | Custom | CloudTrail and GuardDuty delegated administrators, centralized root access, account rename, budgets, and cost anomaly detection |
+| `AWSBillingReadOnlyAccess` | AWS managed | Read access to billing data, needed by the Budgets and Cost Anomaly Detection consoles; takes effect only after IAM access to Billing is activated (step 7 below) |
+| Inline policy (below) | Custom | CloudTrail and GuardDuty delegated administrators, centralized root access, account rename, budgets, cost anomaly detection, and email contacts used to verify budget alert recipients |
 
 An identity that administers Organizations and Identity Center can grant itself further access, so this permission set does not contain its holder. Its purpose is to keep routine administrator access out of the management account, make every management-account session a separate and deliberate sign-in, and limit the impact of mistakes.
+
+Changing `OrganizationAdministration` later requires a root session to re-provision it, because Identity Center applies the change using the signed-in caller's own IAM permissions in the management account, and this permission set deliberately has none. Keep edits to this permission set rare and batch them.
 
 **Do** (signed in as the management account's root user, with MFA):
 
@@ -70,7 +72,8 @@ An identity that administers Organizations and Identity Center can grant itself 
 4. Add the inline policy below.
 5. Name the permission set `OrganizationAdministration`, add a description, and set the session duration to 1 hour.
 6. Choose **AWS accounts**, select the management account, choose **Assign users or groups**, select the operator's user, select `OrganizationAdministration`, and submit.
-7. Sign out of the root user.
+7. Still as the root user, open the account menu, choose **Account**, find **IAM user and role access to Billing information**, choose **Edit**, tick **Activate IAM access**, and choose **Update**.
+8. Sign out of the root user.
 
 ```json
 {
@@ -137,7 +140,7 @@ An identity that administers Organizations and Identity Center can grant itself 
       ],
       "Resource": "*"
     },
-        {
+    {
       "Sid": "BudgetsAndCostAnomalyDetection",
       "Effect": "Allow",
       "Action": [
@@ -152,6 +155,17 @@ An identity that administers Organizations and Identity Center can grant itself 
         "ce:GetAnomalies"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "NotificationContactsForBudgetAlerts",
+      "Effect": "Allow",
+      "Action": [
+        "notifications-contacts:CreateEmailContact",
+        "notifications-contacts:SendActivationCode",
+        "notifications-contacts:ListEmailContacts",
+        "notifications-contacts:ActivateEmailContact"
+      ],
+      "Resource": "*"
     }
   ]
 }
@@ -162,6 +176,7 @@ An identity that administers Organizations and Identity Center can grant itself 
 - The access portal lists the management account with `OrganizationAdministration` only, and project accounts still show `AdministratorAccess`.
 - Signed in to the management account through `OrganizationAdministration`, the AWS Organizations console lists the organization's accounts.
 - In the same session, the Amazon EC2 console reports that access is denied. This confirms the permission set is not general administrator access.
+- The **Account** page shows **IAM user and role access to Billing information** as **Activated**.
 
 ## 5. Root credentials for member accounts
 
@@ -198,7 +213,7 @@ No delegated administrator is registered for IAM. Delegating would allow a secon
 **Verify:**
 
 - The root contains exactly two organizational units: the Security OU and the projects OU.
-- Record `<security-ou-id>` and `<projects-ou-id>` in the private record.
+- Record `<org-root-id>`, `<security-ou-id>`, and `<projects-ou-id>` in the private record.
 
 ## 7. Create member accounts
 
@@ -228,7 +243,23 @@ Account creation is effectively permanent: AWS discourages creating temporary ac
 - The Security OU contains the log archive account and the shared security account, and nothing else.
 - The projects OU contains the existing project account and the project target account.
 - No new account remains directly under the root.
-- Each account's root email inbox received AWS's welcome email, which confirms the address is valid.
+- Each account's root email address is confirmed to reach the operator by sending a test message to it from another address. AWS may not send a welcome email for accounts created through Organizations, so delivery is confirmed directly.
+
+### 7.1 Renaming a member account
+
+**Why.** Renaming changes only the account's display name; the account ID and everything in the account are unchanged, so Terraform state and CLI profiles that refer to IDs are unaffected. Renaming a member account from the management account requires trusted access for AWS Account Management (trusted access only; no delegated administrator is needed) and the `account:PutAccountName` permission, which the `OrganizationAdministration` inline policy already grants. The permission set deliberately does not grant `account:StartPrimaryEmailUpdate`, so it can relabel an account but cannot change its root email address.
+
+**Do** (signed in to the management account through `OrganizationAdministration`):
+
+1. In the AWS Organizations console, choose **Services**, find **AWS Account Management**, and choose **Enable trusted access**. Do not register a delegated administrator.
+2. Choose **AWS accounts**, click the account's name to open its details page, and choose **Rename**. The **Actions** menu on the account list may show the rename entry disabled, so use the details page.
+3. Enter the new name and confirm.
+
+**Verify:**
+
+- The accounts list shows the new name, and the account ID is unchanged against the private record.
+- After signing out of the IAM Identity Center access portal and signing in again, the portal shows the new name.
+- AWS Account Management appears in the list of services with trusted access enabled (see section 12).
 
 ## 8. Trusted access and delegated administrators
 
@@ -250,6 +281,8 @@ CloudTrail has one delegated administrator for the whole organization. It must b
 - In the AWS Organizations console under **Services**, AWS CloudTrail shows trusted access enabled.
 
 ### 8.2 GuardDuty
+
+**Timing.** Perform this step immediately before applying the GuardDuty configuration, not during initial Organization setup. Designating a delegated administrator enables GuardDuty in that account and starts a per-Region 30-day free trial, and nothing exists yet for it to monitor until the baseline infrastructure is applied.
 
 GuardDuty is a Regional service: its delegated administrator is designated separately in each Region, and must be the same account in every Region. The Regions in scope are defined once, as a variable in this repository's `security-services` Terraform configuration. Designate the delegated administrator in each Region in that list; if the list is not yet defined, designate it in `<workload-region>` only and repeat this section when Regions are added.
 
@@ -351,17 +384,19 @@ region = <workload-region>
 
 **Why.** Cost alerts are a detective control, and like logs they are kept out of reach of the accounts they monitor. Budgets and anomaly detection are created centrally in the management account, so no member account, including a project target account used for attack simulation, can view, change, or delete them. An organization-wide budget sets the overall spending limit, including the shared baseline's own costs, while per-account budgets show which account caused a change.
 
+Since 30 September 2026, AWS Budgets verifies each new email recipient, and only verified addresses receive budget notifications. Verification runs through AWS User Notifications and needs the `NotificationContactsForBudgetAlerts` permissions from section 4. The person who clicks the link in the verification email must be signed in to the management account through `OrganizationAdministration`; otherwise the link fails with an expired-link message. Activation codes expire after 12 hours. Verification is per email address per account, so one verification covers every budget in the account.
+
 **Do** (signed in to the management account through `OrganizationAdministration`):
 
 1. Open **Billing and Cost Management**, choose **Budgets**, then **Create budget**, using a customized cost budget each time.
 2. Create the organization budget: name `organization-monthly`, a monthly period, a fixed amount of `<org-monthly-budget>`, and no account filter. Add email alerts to `<alert-email>` at 50%, 80%, and 100% of actual cost, and at 100% of forecasted cost.
-3. For each member account, create a budget named after its role, for example `shared-security-monthly`, with a monthly period, a fixed amount of `<account-monthly-budget>` from the private record, and a **Linked account** filter set to that account only. Add email alerts to `<alert-email>` at 80% and 100% of actual cost, and at 100% of forecasted cost.
-4. Open **Cost Anomaly Detection** and create a monitor: choose an AWS managed monitor with the **Linked account** dimension, named `organization-linked-accounts`. It tracks every member account, including accounts added later.
-5. Create an alert subscription for that monitor: a daily summary sent to `<alert-email>`, with the threshold from the private record.
+3. For each member account, create a budget named after its role, for example `shared-security-monthly`, with a monthly period, a fixed amount of `<account-monthly-budget>` from the private record, and a **Linked account** filter set to that account only. Add email alerts to `<alert-email>` at 80% and 100% of actual cost, and at 100% of forecasted cost. A newly created account can take a day or two to appear in the **Linked account** filter; create its budget after it appears.
+4. Open **Cost Anomaly Detection** and create a monitor; the console creates the monitor and its alert subscription in one flow. Choose an AWS managed monitor with the **Linked account** dimension, named `organization-linked-accounts`. It tracks every member account, including accounts added later. For the alert subscription, choose a daily summary sent to `<alert-email>`, with the threshold from the private record.
 
 **Verify:**
 
 - **Budgets** lists `organization-monthly` and one budget per member account, and each per-account budget's filter shows the account ID recorded for that role.
+- Each budget's detail page shows the `<alert-email>` recipient as active (verified), with no red warning.
 - **Cost Anomaly Detection** shows `organization-linked-accounts` as active, with the daily summary subscription attached. New monitors can take up to 24 hours to start detecting anomalies.
 - Signed in to the project target account through `AdministratorAccess`, the Budgets console shows none of these budgets. This confirms member accounts cannot see or change them.
 
@@ -379,8 +414,8 @@ region = <workload-region>
 
 **Trusted access and delegated administrators:**
 
-- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS CloudTrail, Amazon GuardDuty, AWS Identity and Access Management, and IAM Identity Center. Any other service listed should be explainable.
-- `aws organizations list-delegated-administrators --profile org-management` lists only the shared security account, and `aws organizations list-delegated-services-for-account --account-id <shared-security-account-id> --profile org-management` shows it is delegated administrator for CloudTrail and GuardDuty only.
+- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS Account Management, AWS CloudTrail, AWS Identity and Access Management, and IAM Identity Center. Amazon GuardDuty joins this list when section 8.2 is performed. Any other service listed should be explainable.
+- `aws organizations list-delegated-administrators --profile org-management` lists only the shared security account, and `aws organizations list-delegated-services-for-account --account-id <shared-security-account-id> --profile org-management` shows it is delegated administrator for CloudTrail only until section 8.2 is performed. GuardDuty is added once section 8.2 is done.
 
 **Root credentials** (the check deferred from section 5):
 
@@ -394,11 +429,11 @@ region = <workload-region>
 **Negative tests:**
 
 - In the management account through `OrganizationAdministration`, the Amazon EC2 console reports that access is denied (section 4).
-- GuardDuty is not enabled in the management account in any Region in scope (section 8.2).
+- GuardDuty is not enabled in the management account in the workload Region (section 8.2), and `aws guardduty list-detectors --region <workload-region> --profile org-management` returns no detector IDs. Once section 8.2 is performed, this check also applies to every Region designated there.
 - In the project target account, the Budgets console shows none of the central budgets (section 11).
 - Before signing in to the management session, `aws sts get-caller-identity --profile org-management` fails (section 10).
 
 **Records:**
 
-- The private record contains every account ID, organizational unit ID, and the date GuardDuty was designated in each Region, which marks the start of its 30-day free trial.
+- The private record contains every account ID, organizational unit ID, and, if section 8.2 has been performed, the date GuardDuty was designated in each Region, which marks the start of its 30-day free trial.
 - Any difference between this document and what was actually done has been noted for a correction pull request.
