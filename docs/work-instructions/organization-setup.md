@@ -15,7 +15,7 @@ Use this document for the initial setup of the Organization's security baseline.
 | Placeholder | Meaning |
 |---|---|
 | `<management-account-id>` | The Organization's management account |
-| `<shared-security-account-id>` | Delegated administrator for CloudTrail and GuardDuty |
+| `<shared-security-account-id>` | Delegated administrator for CloudTrail, and for GuardDuty once section 8.2 is performed |
 | `<log-archive-account-id>` | Holds the organization trail's bucket |
 | `<project-tooling-account-id>` | A project's Terraform state, CI trust, and SIEM |
 | `<project-target-account-id>` | A project's attack-simulation account |
@@ -384,17 +384,19 @@ region = <workload-region>
 
 **Why.** Cost alerts are a detective control, and like logs they are kept out of reach of the accounts they monitor. Budgets and anomaly detection are created centrally in the management account, so no member account, including a project target account used for attack simulation, can view, change, or delete them. An organization-wide budget sets the overall spending limit, including the shared baseline's own costs, while per-account budgets show which account caused a change.
 
+Since 30 September 2026, AWS Budgets verifies each new email recipient, and only verified addresses receive budget notifications. Verification runs through AWS User Notifications and needs the `NotificationContactsForBudgetAlerts` permissions from section 4. The person who clicks the link in the verification email must be signed in to the management account through `OrganizationAdministration`; otherwise the link fails with an expired-link message. Activation codes expire after 12 hours. Verification is per email address per account, so one verification covers every budget in the account.
+
 **Do** (signed in to the management account through `OrganizationAdministration`):
 
 1. Open **Billing and Cost Management**, choose **Budgets**, then **Create budget**, using a customized cost budget each time.
 2. Create the organization budget: name `organization-monthly`, a monthly period, a fixed amount of `<org-monthly-budget>`, and no account filter. Add email alerts to `<alert-email>` at 50%, 80%, and 100% of actual cost, and at 100% of forecasted cost.
-3. For each member account, create a budget named after its role, for example `shared-security-monthly`, with a monthly period, a fixed amount of `<account-monthly-budget>` from the private record, and a **Linked account** filter set to that account only. Add email alerts to `<alert-email>` at 80% and 100% of actual cost, and at 100% of forecasted cost.
-4. Open **Cost Anomaly Detection** and create a monitor: choose an AWS managed monitor with the **Linked account** dimension, named `organization-linked-accounts`. It tracks every member account, including accounts added later.
-5. Create an alert subscription for that monitor: a daily summary sent to `<alert-email>`, with the threshold from the private record.
+3. For each member account, create a budget named after its role, for example `shared-security-monthly`, with a monthly period, a fixed amount of `<account-monthly-budget>` from the private record, and a **Linked account** filter set to that account only. Add email alerts to `<alert-email>` at 80% and 100% of actual cost, and at 100% of forecasted cost. A newly created account can take a day or two to appear in the **Linked account** filter; create its budget after it appears.
+4. Open **Cost Anomaly Detection** and create a monitor; the console creates the monitor and its alert subscription in one flow. Choose an AWS managed monitor with the **Linked account** dimension, named `organization-linked-accounts`. It tracks every member account, including accounts added later. For the alert subscription, choose a daily summary sent to `<alert-email>`, with the threshold from the private record.
 
 **Verify:**
 
 - **Budgets** lists `organization-monthly` and one budget per member account, and each per-account budget's filter shows the account ID recorded for that role.
+- Each budget's detail page shows the `<alert-email>` recipient as active (verified), with no red warning.
 - **Cost Anomaly Detection** shows `organization-linked-accounts` as active, with the daily summary subscription attached. New monitors can take up to 24 hours to start detecting anomalies.
 - Signed in to the project target account through `AdministratorAccess`, the Budgets console shows none of these budgets. This confirms member accounts cannot see or change them.
 
@@ -412,8 +414,8 @@ region = <workload-region>
 
 **Trusted access and delegated administrators:**
 
-- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS CloudTrail, Amazon GuardDuty, AWS Identity and Access Management, and IAM Identity Center. Any other service listed should be explainable.
-- `aws organizations list-delegated-administrators --profile org-management` lists only the shared security account, and `aws organizations list-delegated-services-for-account --account-id <shared-security-account-id> --profile org-management` shows it is delegated administrator for CloudTrail and GuardDuty only.
+- `aws organizations list-aws-service-access-for-organization --profile org-management` includes AWS Account Management, AWS CloudTrail, AWS Identity and Access Management, and IAM Identity Center. Amazon GuardDuty joins this list when section 8.2 is performed. Any other service listed should be explainable.
+- `aws organizations list-delegated-administrators --profile org-management` lists only the shared security account, and `aws organizations list-delegated-services-for-account --account-id <shared-security-account-id> --profile org-management` shows it is delegated administrator for CloudTrail only until section 8.2 is performed. GuardDuty is added once section 8.2 is done.
 
 **Root credentials** (the check deferred from section 5):
 
@@ -427,11 +429,11 @@ region = <workload-region>
 **Negative tests:**
 
 - In the management account through `OrganizationAdministration`, the Amazon EC2 console reports that access is denied (section 4).
-- GuardDuty is not enabled in the management account in any Region in scope (section 8.2).
+- GuardDuty is not enabled in the management account in the workload Region (section 8.2), and `aws guardduty list-detectors --region <workload-region> --profile org-management` returns no detector IDs. Once section 8.2 is performed, this check also applies to every Region designated there.
 - In the project target account, the Budgets console shows none of the central budgets (section 11).
 - Before signing in to the management session, `aws sts get-caller-identity --profile org-management` fails (section 10).
 
 **Records:**
 
-- The private record contains every account ID, organizational unit ID, and the date GuardDuty was designated in each Region, which marks the start of its 30-day free trial.
+- The private record contains every account ID, organizational unit ID, and, if section 8.2 has been performed, the date GuardDuty was designated in each Region, which marks the start of its 30-day free trial.
 - Any difference between this document and what was actually done has been noted for a correction pull request.
