@@ -6,7 +6,7 @@ This work instruction configures the AWS Organization structure that the Terrafo
 
 These settings apply across every project in the Organization, so they are deliberately not owned by any single project's code. They are configured manually by following this document, which keeps the procedure reviewable even though it is not automated. Moving them into Terraform in this repository is possible later. The decision behind this split is recorded in [aws-detection-as-code ADR 0011](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0011-shared-security-baseline-in-dedicated-account-and-repository.md).
 
-Use this document for the initial setup of the Organization's security baseline. Adding a later project account reuses sections 7, 10, 10, and 11.
+Use this document for the initial setup of the Organization's security baseline. Adding a later project account reuses sections 7, 9, 10, and 11.
 
 ## 2. Conventions
 
@@ -42,7 +42,7 @@ Use this document for the initial setup of the Organization's security baseline.
 - The projects OU and the existing project account exist.
 - A unique email address is ready for each account to be created. AWS requires a different address per account; plus-addressing on a single inbox (for example `name+role@example.com`) satisfies this.
 - The operator's private record of real values is open.
-- A Codespace for this repository is running, for the CLI steps in section 11.
+- A Codespace for this repository is running, for the CLI steps in section 10.
 - **Cost:** most steps here are free. Designating a GuardDuty delegated administrator automatically enables GuardDuty in that account in each Region where it is designated. That starts GuardDuty's 30-day free trial, after which usage is billed. Section 8.2 covers this before any designation happens.
 
 ## 4. Management-account access for the operator
@@ -137,7 +137,7 @@ An identity that administers Organizations and Identity Center can grant itself 
       ],
       "Resource": "*"
     },
-        {
+    {
       "Sid": "BudgetsAndCostAnomalyDetection",
       "Effect": "Allow",
       "Action": [
