@@ -213,7 +213,7 @@ No delegated administrator is registered for IAM. Delegating would allow a secon
 **Verify:**
 
 - The root contains exactly two organizational units: the Security OU and the projects OU.
-- Record `<security-ou-id>` and `<projects-ou-id>` in the private record.
+- Record `<org-root-id>`, `<security-ou-id>`, and `<projects-ou-id>` in the private record.
 
 ## 7. Create member accounts
 
@@ -243,7 +243,7 @@ Account creation is effectively permanent: AWS discourages creating temporary ac
 - The Security OU contains the log archive account and the shared security account, and nothing else.
 - The projects OU contains the existing project account and the project target account.
 - No new account remains directly under the root.
-- Each account's root email inbox received AWS's welcome email, which confirms the address is valid.
+- Each account's root email address is confirmed to reach the operator by sending a test message to it from another address. AWS may not send a welcome email for accounts created through Organizations, so delivery is confirmed directly.
 
 ## 8. Trusted access and delegated administrators
 
@@ -265,6 +265,8 @@ CloudTrail has one delegated administrator for the whole organization. It must b
 - In the AWS Organizations console under **Services**, AWS CloudTrail shows trusted access enabled.
 
 ### 8.2 GuardDuty
+
+**Timing.** Perform this step immediately before applying the GuardDuty configuration, not during initial Organization setup. Designating a delegated administrator enables GuardDuty in that account and starts a per-Region 30-day free trial, and nothing exists yet for it to monitor until the baseline infrastructure is applied.
 
 GuardDuty is a Regional service: its delegated administrator is designated separately in each Region, and must be the same account in every Region. The Regions in scope are defined once, as a variable in this repository's `security-services` Terraform configuration. Designate the delegated administrator in each Region in that list; if the list is not yet defined, designate it in `<workload-region>` only and repeat this section when Regions are added.
 
