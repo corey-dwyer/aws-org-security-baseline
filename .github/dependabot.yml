@@ -1,7 +1,17 @@
 version: 2
+
 updates:
+
   - package-ecosystem: "devcontainers"
     directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: "terraform"
+    directories:
+      - "/bootstrap"
     schedule:
       interval: "weekly"
     commit-message:
