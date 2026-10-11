@@ -47,7 +47,7 @@ Use this document for the initial setup of the Organization's security baseline.
 
 ## 4. Management-account access for the operator
 
-**Why.** Organization-level tasks (creating accounts and organizational units, enabling trusted access, registering delegated administrators, and Identity Center assignments) can only be done from the management account. The operator's day-to-day Identity Center access has no assignment there, and the root user is reserved for tasks that require it. This section creates a dedicated permission set, `OrganizationAdministration`, assigned only to the management account. It is the only step in this work instruction that uses the root user: assigning access to the management account requires IAM administrative permissions there, which no Identity Center session has yet.
+**Why.** Organization-level tasks (creating accounts and organizational units, enabling trusted access, registering delegated administrators, and Identity Center assignments) can only be done from the management account. The operator's day-to-day Identity Center access has no assignment there, and the root user is reserved for tasks that require it. This section creates a dedicated permission set, `OrganizationAdministration`, assigned only to the management account. This section is where the root user is used, in a single session, for two things: assigning the first access to the management account, and activating IAM access to Billing. Assigning access to the management account requires IAM administrative permissions there, which no Identity Center session has yet. IAM access to Billing is off by default for the management account, only the root user can turn it on, and the Budgets and Cost Anomaly Detection consoles need it.
 
 The permission set grants what this work instruction needs and nothing for running workloads:
 
@@ -57,10 +57,12 @@ The permission set grants what this work instruction needs and nothing for runni
 | `AWSSSOMasterAccountAdministrator` | AWS managed | Identity Center permission sets and account assignments |
 | `AWSCloudTrail_ReadOnlyAccess` | AWS managed | Read access the CloudTrail console needs to display organization settings |
 | `AmazonGuardDutyReadOnlyAccess` | AWS managed | Read access the GuardDuty console needs to display organization settings |
-| `AWSBillingReadOnlyAccess` | AWS managed | Read access to billing data, needed by the Budgets and Cost Anomaly Detection consoles |
-| Inline policy (below) | Custom | CloudTrail and GuardDuty delegated administrators, centralized root access, account rename, budgets, and cost anomaly detection |
+| `AWSBillingReadOnlyAccess` | AWS managed | Read access to billing data, needed by the Budgets and Cost Anomaly Detection consoles; takes effect only after IAM access to Billing is activated (step 7 below) |
+| Inline policy (below) | Custom | CloudTrail and GuardDuty delegated administrators, centralized root access, account rename, budgets, cost anomaly detection, and email contacts used to verify budget alert recipients |
 
 An identity that administers Organizations and Identity Center can grant itself further access, so this permission set does not contain its holder. Its purpose is to keep routine administrator access out of the management account, make every management-account session a separate and deliberate sign-in, and limit the impact of mistakes.
+
+Changing `OrganizationAdministration` later requires a root session to re-provision it, because Identity Center applies the change using the signed-in caller's own IAM permissions in the management account, and this permission set deliberately has none. Keep edits to this permission set rare and batch them.
 
 **Do** (signed in as the management account's root user, with MFA):
 
@@ -70,7 +72,8 @@ An identity that administers Organizations and Identity Center can grant itself 
 4. Add the inline policy below.
 5. Name the permission set `OrganizationAdministration`, add a description, and set the session duration to 1 hour.
 6. Choose **AWS accounts**, select the management account, choose **Assign users or groups**, select the operator's user, select `OrganizationAdministration`, and submit.
-7. Sign out of the root user.
+7. Still as the root user, open the account menu, choose **Account**, find **IAM user and role access to Billing information**, choose **Edit**, tick **Activate IAM access**, and choose **Update**.
+8. Sign out of the root user.
 
 ```json
 {
@@ -152,6 +155,17 @@ An identity that administers Organizations and Identity Center can grant itself 
         "ce:GetAnomalies"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "NotificationContactsForBudgetAlerts",
+      "Effect": "Allow",
+      "Action": [
+        "notifications-contacts:CreateEmailContact",
+        "notifications-contacts:SendActivationCode",
+        "notifications-contacts:ListEmailContacts",
+        "notifications-contacts:ActivateEmailContact"
+      ],
+      "Resource": "*"
     }
   ]
 }
@@ -162,6 +176,7 @@ An identity that administers Organizations and Identity Center can grant itself 
 - The access portal lists the management account with `OrganizationAdministration` only, and project accounts still show `AdministratorAccess`.
 - Signed in to the management account through `OrganizationAdministration`, the AWS Organizations console lists the organization's accounts.
 - In the same session, the Amazon EC2 console reports that access is denied. This confirms the permission set is not general administrator access.
+- The **Account** page shows **IAM user and role access to Billing information** as **Activated**.
 
 ## 5. Root credentials for member accounts
 
