@@ -245,6 +245,22 @@ Account creation is effectively permanent: AWS discourages creating temporary ac
 - No new account remains directly under the root.
 - Each account's root email address is confirmed to reach the operator by sending a test message to it from another address. AWS may not send a welcome email for accounts created through Organizations, so delivery is confirmed directly.
 
+### 7.1 Renaming a member account
+
+**Why.** Renaming changes only the account's display name; the account ID and everything in the account are unchanged, so Terraform state and CLI profiles that refer to IDs are unaffected. Renaming a member account from the management account requires trusted access for AWS Account Management (trusted access only; no delegated administrator is needed) and the `account:PutAccountName` permission, which the `OrganizationAdministration` inline policy already grants. The permission set deliberately does not grant `account:StartPrimaryEmailUpdate`, so it can relabel an account but cannot change its root email address.
+
+**Do** (signed in to the management account through `OrganizationAdministration`):
+
+1. In the AWS Organizations console, choose **Services**, find **AWS Account Management**, and choose **Enable trusted access**. Do not register a delegated administrator.
+2. Choose **AWS accounts**, click the account's name to open its details page, and choose **Rename**. The **Actions** menu on the account list may show the rename entry disabled, so use the details page.
+3. Enter the new name and confirm.
+
+**Verify:**
+
+- The accounts list shows the new name, and the account ID is unchanged against the private record.
+- After signing out of the IAM Identity Center access portal and signing in again, the portal shows the new name.
+- AWS Account Management appears in the list of services with trusted access enabled (see section 12).
+
 ## 8. Trusted access and delegated administrators
 
 **Why.** The organization trail and GuardDuty's organization configuration are administered from the shared security account rather than the management account, which keeps day-to-day security administration out of the most privileged account. Only the management account can designate a delegated administrator, so this designation is part of the organization setup, while the trail and GuardDuty settings themselves are managed with Terraform in this repository.
