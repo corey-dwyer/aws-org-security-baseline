@@ -1,0 +1,19 @@
+# 0004: Store Terraform State in One Bucket in the Shared Security Account, with Backend Credentials Always from That Account
+
+## Status
+Accepted. Uses the same S3 backend with native locking as [aws-detection-as-code ADR 0004](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0004-terraform-remote-state-in-s3.md), applied here across several accounts.
+
+## Context
+This repository's Terraform configurations apply to different accounts: the shared security account, the log archive account, and the management account. Terraform state records the resources it manages and can contain sensitive attributes, so who can read and write it matters as much as who can apply. HashiCorp's guidance for multi-account setups is to keep state in a separate administrative account, outside the infrastructure it manages, and to give the S3 backend and the provider separate credentials. Three layouts were considered: a state bucket in each account, a central bucket whose policy grants other accounts' roles access to their own state, and a central bucket accessed only with credentials from its own account. A bucket in each account spreads state across accounts, including the management account, which should hold as little as possible. A cross-account bucket policy puts a trust path from each account into the account that holds the state, and the policy must be edited whenever an account is added.
+
+## Decision
+All of this repository's state is stored in one S3 bucket in the shared security account. The bucket is created in the account regional namespace, which reserves its name for that account, and has versioning, server-side encryption with S3-managed keys, a full public access block, a policy denying requests that do not use TLS, and a lifecycle rule that expires noncurrent versions after 90 days. Locking uses S3 lockfiles, with no separate lock table. Each root configuration has its own state key. Every configuration's backend authenticates with credentials from the shared security account, whichever account the configuration changes. A configuration that changes another account uses that account's credentials in its provider block only. The bucket's policy names no other account. The bucket is created by a bootstrap configuration applied by a human operator with local state, which is then migrated into the bucket it created; deletion of the bucket is blocked in Terraform. The bucket name and the backend credentials are supplied at initialization from a file that is not committed.
+
+## Consequences
+- Only principals in the shared security account can read or write state, so adding an account never changes the bucket's policy, and no account trusts another with its state.
+- A configuration that changes the management account needs two sign-in sessions, one for state and one for the changes, which also keeps management credentials off the routine session.
+- The shared security account stores state and is also a target of this repository's configurations, which falls short of keeping state wholly outside the infrastructure it manages. The exposure is limited because the bootstrap configuration manages only the bucket, and its deletion is blocked.
+- Encryption uses S3-managed keys, so there is no key to lose or to misconfigure, and no separate key policy or key audit trail. A customer-managed key would be revisited if state ever held long-lived secrets.
+- Old state versions are kept for 90 days, which allows recovery from a bad apply and bounds how long superseded state remains.
+- The bucket's name is permanent. Replacing it later means migrating every configuration's state.
+- A configuration run with the wrong account's credentials is a risk the layout does not remove: the backend and provider credentials are chosen separately and must each be correct.
