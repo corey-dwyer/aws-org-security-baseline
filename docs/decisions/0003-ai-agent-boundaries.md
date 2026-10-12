@@ -1,0 +1,18 @@
+# 0003: Constrain the AI Coding Agent to File Edits, with No Direct Git, AWS, or Credential Access
+
+## Status
+Accepted. This repository applies the same boundary recorded for the consuming project in [aws-detection-as-code ADR 0007](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0007-ai-agent-boundaries.md), and extends it to the files and tools this repository adds exposure to.
+
+## Context
+This repository is built with an AI coding agent (Claude Code) running inside the development environment. The agent can edit files and run shell commands, including git and AWS CLI commands, and the environment holds the operator's AWS sign-in state. The stakes are higher here than in a project repository: the operator applies this repository's configurations with administrator access to the shared security and log archive accounts, and with a separate session to the management account, so a command run in this environment can change organization-wide logging and detection. The environment also holds files that must never reach a public repository or a model's context: AWS CLI configuration and cached sign-in tokens, backend configuration that names the state bucket and its account, Terraform variable files, and state files, which can contain resource attributes. During AWS CLI setup, the operator is also offered an MCP server that would let an AI agent call AWS APIs directly using those credentials. The repository's controls depend on changes being reviewable and attributable: every change reaches the shared services through reviewed Terraform and an operator's apply (see 0002), and every commit on `main` is signed.
+
+## Decision
+The AI coding agent may propose and make file edits only, and the operator reviews every proposed change before accepting it. All git operations, all GitHub CLI use, all AWS commands, and all Terraform commands are performed by the operator. The agent is denied reading the AWS CLI configuration directory and the repository's backend configuration, variable, and state files. All MCP tools are denied, so no tool server, including AWS's, can give the agent API access. The permission modes that skip per-action approval are disabled. These boundaries are configured in the repository's committed Claude Code settings (`.claude/settings.json`), which the operator writes by hand, since the restricted party should not write its own restrictions. Third-party modifications to the agent are not installed, because they can override the deny rules.
+
+## Consequences
+- There is no unreviewed path from an AI request to an AWS API call or to the shared services, which is consistent with the rule that only a human operator applies changes here.
+- Each signed commit represents a change the operator has reviewed and chosen to commit, so authorship and accountability stay unambiguous.
+- Because the settings are committed, the boundary applies automatically in every development environment created from this repository.
+- The deny rules are a guardrail, not a security boundary. They match commands as typically written, and an unusual invocation (for example, through another shell) may not match. The file-read rules do not cover commands that read files without naming them, such as a recursive search or a script. Per-action approval remains the backstop, and OS-level sandboxing is the stronger boundary if one is needed.
+- The agent cannot run Terraform at all, including read-only commands such as `fmt` or `validate`, and cannot see values in local configuration, so troubleshooting that depends on them is done by the operator. Development is slower as a result.
+- Loosening any of these boundaries would be recorded as a new decision superseding this one.
