@@ -10,4 +10,4 @@ Numbers in this index refer to decisions in this repository only. This baseline 
 
 ## Decisions
 
-No decisions recorded yet.
+- [0001: Manage the Organization-Wide Security Baseline in a Dedicated Repository](0001-dedicated-repository-for-shared-security-baseline.md)
