@@ -1,0 +1,17 @@
+# 0005: Access the Management Account Through a Dedicated Permission Set, Not Administrator Access
+
+## Status
+Accepted. Builds on [aws-detection-as-code ADR 0003](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0003-human-access-via-iam-identity-center.md), which makes IAM Identity Center the path for human access to AWS.
+
+## Context
+Organization-level tasks can be done only from the management account: creating accounts and organizational units, enabling trusted service access, registering delegated administrators, managing centralized root access, and assigning Identity Center access. That account sits above every other account's guardrails, so a compromise of it is a compromise of the whole Organization. It should run no workloads and be signed into rarely. The operator's routine access in member accounts is administrator access, and extending the same assignment to the management account would make the most powerful account part of everyday work, and give every routine session the authority to change account structure and organization-wide guardrails. Using the root user for these tasks is not a routine path either: its credentials are unrestricted, and AWS does not allow the root user to start the privileged sessions that centralized root access provides.
+
+## Decision
+The management account has a dedicated Identity Center permission set, `OrganizationAdministration`, assigned only to the operator's user and only on the management account, with a one-hour session. It combines AWS managed policies for Organizations and Identity Center administration and for read access to billing data and to the CloudTrail and GuardDuty consoles, with an inline policy limited to the specific actions needed for delegated administrator registration, centralized root access, account naming, budgets and cost anomaly detection, and the contacts used to verify budget alert recipients. It grants no permissions for running workloads. The operator's routine access has no assignment in the management account, so each management-account session is a separate, deliberate sign-in, and the command-line profile for it uses its own sign-in session. The management account's root user, protected by MFA, is used in a single session to create the permission set, assign it, and activate IAM access to billing information, and is otherwise left unused.
+
+## Consequences
+- Routine administrator sessions cannot change organization structure or guardrails, and no workload runs in the management account.
+- The permission set does not contain its holder: an identity that administers Organizations and Identity Center can grant itself further access. The protection is the separation of sessions and the narrow purpose of the role, not an upper limit on what it can do.
+- Changing the permission set later requires a root session to re-provision it, because Identity Center applies the change using the signed-in caller's own IAM permissions in the management account, and this permission set deliberately has none. Edits should be rare and batched, and the root user and its MFA device remain a standing dependency.
+- A task outside the listed actions fails until a permission is added, which costs that root session.
+- A Terraform configuration that changes the management account needs this second sign-in in addition to the session used for its state (see 0004).
