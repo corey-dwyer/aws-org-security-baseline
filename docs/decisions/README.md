@@ -11,3 +11,4 @@ Numbers in this index refer to decisions in this repository only. This baseline 
 ## Decisions
 
 - [0001: Manage the Organization-Wide Security Baseline in a Dedicated Repository](0001-dedicated-repository-for-shared-security-baseline.md)
+- [0002: Give the Shared Baseline Repository No CI Access to AWS](0002-no-ci-access-to-aws.md)
