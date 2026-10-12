@@ -15,3 +15,4 @@ Numbers in this index refer to decisions in this repository only. This baseline 
 - [0003: Constrain the AI Coding Agent to File Edits, with No Direct Git, AWS, or Credential Access](0003-ai-agent-boundaries.md)
 - [0004: Store Terraform State in One Bucket in the Shared Security Account, with Backend Credentials Always from That Account](0004-terraform-state-in-shared-security-account.md)
 - [0005: Access the Management Account Through a Dedicated Permission Set, Not Administrator Access](0005-management-account-access-via-dedicated-permission-set.md)
+- [0006: Centralize Root Access Management in the Management Account, with No Delegated Administrator](0006-centralized-root-access-with-no-delegated-administrator.md)
