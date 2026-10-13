@@ -1,0 +1,19 @@
+# 0007: Protect the Log Archive Bucket with SSE-S3, Versioning, and Bucket Policy Controls, and Defer Object Lock
+
+## Status
+Accepted.
+
+## Context
+The log archive bucket receives the organization trail's logs, and later GuardDuty findings, and is the permanent source of truth that consumers replay from, as described in [aws-detection-as-code ADR 0010](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0010-disposable-opensearch-siem-with-replayable-ingestion.md). It must resist exposure, loss, and tampering, and it must stay readable by consumers in other accounts. Three choices shape that. For encryption, CloudTrail delivers with SSE-S3 and needs no KMS key, whereas a customer-managed key as the bucket default would require every reader in every account to be granted the key, and a key-policy mistake would silently stop log delivery. GuardDuty's findings export does require a KMS key for the objects it writes, and its key and the bucket must be in the same Region. For retention, log volume in this environment is small, so storage cost does not force expiry. For immutability, S3 Object Lock offers governance mode, which any principal holding the bypass permission can override, and compliance mode, which no one can override, including the root user, and which can only be defeated early by deleting the AWS account. Once enabled on a bucket, Object Lock cannot be disabled and versioning cannot be suspended, although it can be enabled later on an existing versioned bucket.
+
+## Decision
+The bucket uses SSE-S3 as its default encryption. KMS is used only where a service requires it, which currently means the GuardDuty export, and that key is decided when the export is configured. Versioning is enabled. Current objects never expire. Noncurrent versions expire after 365 days, and incomplete multipart uploads are aborted after 7 days. All four public access block settings are on. The bucket policy denies any request not made over TLS, and allows CloudTrail to write only for the organization trail's ARN, only to the management account's and the organization's delivery paths. No other principal is granted access by this configuration, and readers are granted access individually when they exist. The bucket cannot be destroyed through Terraform. Object Lock is not enabled. Tamper resistance relies on CloudTrail log file integrity validation and on a protective service control policy for the Security OU, both intended for later work. Enabling Object Lock later requires its own decision record.
+
+## Consequences
+- Access to log objects is governed by IAM and the bucket policy alone, with no key-level audit trail or independent revocation. Consumers in other accounts need only a bucket policy grant, not a key grant.
+- Until log file validation and the protective service control policy exist, a principal with administrator access in the log archive account can permanently delete object versions. Versioning preserves superseded objects only against ordinary overwrites and deletions.
+- The GuardDuty export will need its own KMS key, and its statements will be added to this bucket's single policy.
+- The SNS topic that announces new objects is not encrypted. Its messages contain only the bucket name, object key, and size, never log contents.
+- Storage for current objects grows without bound. This is acceptable at this volume and is revisited if cost data shows otherwise.
+- Deliberately deferring Object Lock keeps the decision reversible. It can still be enabled later, but it cannot then be undone.
+- Removing the bucket requires an intentional change to the configuration.
