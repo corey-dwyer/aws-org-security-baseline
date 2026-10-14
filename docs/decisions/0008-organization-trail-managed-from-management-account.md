@@ -1,0 +1,18 @@
+# 0008: Manage the Organization Trail from the Management Account
+
+## Status
+Accepted. Partially supersedes [aws-detection-as-code ADR 0009](https://github.com/corey-dwyer/aws-detection-as-code/blob/main/docs/decisions/0009-separate-log-archive-security-tooling-and-target-accounts.md), which states that the organization trail is administered from the security tooling account. Applies the credential split in [0004](0004-terraform-state-in-shared-security-account.md) and the access model in [0005](0005-management-account-access-via-dedicated-permission-set.md).
+
+## Context
+An organization trail can be created and changed by the management account or by a CloudTrail delegated administrator, and the management account owns it either way. The shared security account is registered as the delegated administrator, so administering the trail from there would keep the management account out of routine work, and that was the original design. The AWS Terraform provider reads a trail back by its ARN, and an organization trail's ARN contains the management account's ID. CloudTrail rejects a read when the ARN's account differs from the caller's, so with the delegated administrator's credentials the provider created the trail and then failed to read it back, with an "Account number does not match caller's account" error. A trail that Terraform cannot read cannot be planned, updated, or checked for drift. Three options remained: manage the trail from the management account, create it and leave it outside Terraform, or manage it through a script or a different provider whose behavior could not be verified.
+
+## Decision
+The organization trail is managed by a Terraform root configuration whose provider uses the management account's credentials and whose state is stored in the shared security account (0004). The configuration has its own state key and is applied by a human, as all of this repository's configuration is (0002). The CloudTrail delegated administrator registration stays in place for viewing and emergency administration through the console or API, but Terraform does not use it. The existing trail was imported into the configuration, and a plan then showed no differences. Importing and planning need only the read-only CloudTrail access that the management account's dedicated permission set already has (0005), so that permission set was not changed.
+
+## Consequences
+- Every Terraform operation on the trail runs as the account that owns it, so plan, apply, and drift detection all work.
+- Applying needs two signed-in sessions, one for state and one for changes, and each management session stays a deliberate sign-in (0004, 0005).
+- The first change to the trail itself needs CloudTrail write actions added to the management account's permission set, which costs a root session (0005). Planning and importing do not.
+- The management account now holds a Terraform-managed resource. The trail is a control-plane resource and not a workload, but it is the first thing this repository manages there, and once those write permissions exist it widens what a management session can do.
+- The delegated administrator can still stop or delete the trail outside Terraform. Terraform would show the change as drift at the next plan, but preventing it is the job of a service control policy, not of where the trail is managed.
+- If a later provider version can read a trail created by a delegated administrator, this decision can be revisited in a new record.
