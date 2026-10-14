@@ -118,6 +118,48 @@ resource "aws_s3_bucket_policy" "log_archive" {
           }
         }
       },
+      {
+        Sid       = "AllowGuardDutyGetBucketLocation"
+        Effect    = "Allow"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action    = "s3:GetBucketLocation"
+        Resource  = aws_s3_bucket.log_archive.arn
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.security_account_id }
+          StringLike   = { "aws:SourceArn" = "arn:aws:guardduty:*:${var.security_account_id}:detector/*" }
+        }
+      },
+      {
+        Sid       = "AllowGuardDutyPutFindings"
+        Effect    = "Allow"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.log_archive.arn}/guardduty/*"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.security_account_id }
+          StringLike   = { "aws:SourceArn" = "arn:aws:guardduty:*:${var.security_account_id}:detector/*" }
+        }
+      },
+      {
+        Sid       = "DenyGuardDutyUnencryptedUploads"
+        Effect    = "Deny"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.log_archive.arn}/guardduty/*"
+        Condition = {
+          StringNotEquals = { "s3:x-amz-server-side-encryption" = "aws:kms" }
+        }
+      },
+      {
+        Sid       = "DenyGuardDutyWrongKey"
+        Effect    = "Deny"
+        Principal = { Service = "guardduty.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.log_archive.arn}/guardduty/*"
+        Condition = {
+          StringNotEquals = { "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.guardduty_export.arn }
+        }
+      },
     ]
   })
 
