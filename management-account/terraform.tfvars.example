@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in your values.
+# The account this configuration applies to: the management account.
+aws_profile = "your-management-profile"
+
+# The organization log archive bucket (account regional namespace, ends in -an).
+# The name contains the log archive account's ID, so the real value stays out of the repo.
+log_bucket_name = "your-log-archive-bucket-name"
