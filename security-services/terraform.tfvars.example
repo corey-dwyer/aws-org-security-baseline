@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored) and fill in your values.
+# The account this configuration applies to: the shared security account.
+aws_profile = "your-shared-security-profile"

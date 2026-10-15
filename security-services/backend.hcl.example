@@ -1,0 +1,5 @@
+# Copy to backend.hcl (gitignored) and fill in real values.
+# The bucket name is: org-security-baseline-tfstate-<account-id>-<region>-an
+bucket = "your-state-bucket-name"
+# Always the shared security account's profile (ADR 0004). Here it is also the account this configuration changes, so it matches aws_profile in terraform.tfvars.
+profile = "your-shared-security-profile"
