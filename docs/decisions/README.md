@@ -18,3 +18,4 @@ Numbers in this index refer to decisions in this repository only. This baseline 
 - [0006: Centralize Root Access Management in the Management Account, with No Delegated Administrator](0006-centralized-root-access-with-no-delegated-administrator.md)
 - [0007: Protect the Log Archive Bucket with SSE-S3, Versioning, and Bucket Policy Controls, and Defer Object Lock](0007-log-archive-bucket-protection.md)
 - [0008: Manage the Organization Trail from the Management Account](0008-organization-trail-managed-from-management-account.md)
+- [0009: Record S3 Data Events Organization-Wide, Excluding the Log Archive Bucket](0009-organization-wide-s3-data-events.md)
