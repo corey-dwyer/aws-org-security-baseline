@@ -14,6 +14,7 @@ updates:
       - "/bootstrap"
       - "/log-archive"
       - "/management-account"
+      - "/security-services"
     schedule:
       interval: "weekly"
     commit-message:
